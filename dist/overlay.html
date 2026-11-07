@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wheelcast overlay</title>
+<!-- SQUEEKCHAIN-VERIFY: paste the page tag Squeekchain gives you on the line below -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --scale:1;
+    --ink:#10192B; --ink2:#1B2A44; --ink3:#25395A; --paper:#F3F6FA; --steel:#8FA3B8;
+    --signal:#FFD23F; --copper:#C8743A; --tally:#E5383B; --go:#3FD07A;
+    --fg:var(--paper); --fg2:#B9C6D6;
+    --cond:"Barlow Condensed","Bahnschrift Condensed","Bahnschrift","Arial Narrow","Roboto Condensed","DejaVu Sans Condensed",sans-serif;
+    --body:"Barlow",system-ui,sans-serif;
+  }
+  body.daylight{--ink:#F3F6FA;--ink2:#E2E8F0;--ink3:#CBD5E1;--fg:#10192B;--fg2:#41506A;--steel:#5B6F88}
+  body.copper{--ink:#24130B;--ink2:#3A2214;--ink3:#52311D;--fg:#FFF4E8;--fg2:#E2C4A8;--steel:#C9A27F}
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+  body{font-family:var(--body);color:var(--fg);-webkit-font-smoothing:antialiased}
+  body.checker{background:repeating-conic-gradient(#2b2f38 0 25%,#22262e 0 50%) 0 0/24px 24px}
+  body.stagebg{background:radial-gradient(120% 90% at 50% 40%,#3a4658 0,#1d2533 60%,#121822 100%)}
+  body.stagebg::before{content:"";position:fixed;inset:0;opacity:.22;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .w{position:absolute;transform-origin:top left;transform:scale(var(--scale))}
+  .hidden{display:none!important}
+  .num{font-variant-numeric:tabular-nums}
+  svg.i{width:1em;height:1em;vertical-align:-.12em}
+
+  body[data-w="alert"] #alert{left:20px;top:40px}
+  body[data-w="block"] #block{left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scale));transform-origin:center}
+  body[data-w="gauge"] #gauge,body[data-w="poll"] #poll{left:10px;top:10px}
+  body[data-w="ticker"] #ticker{left:0;right:0;bottom:0;transform-origin:bottom left}
+  body[data-w="all"] #alert{left:48px;top:56px}
+  body[data-w="all"] #block{left:50%;top:44%;transform:translate(-50%,-50%) scale(var(--scale));transform-origin:center}
+  body[data-w="all"] #gauge{left:48px;bottom:96px;transform-origin:bottom left}
+  body[data-w="all"] #poll{right:48px;bottom:96px;transform-origin:bottom right}
+  body[data-w="all"] #ticker{left:0;right:0;bottom:0;transform-origin:bottom left}
+
+  /* ================= RUN ALERT: a broadcast wedge with Squeektoshi leaping out of it ================= */
+  #alert{width:780px;height:200px;pointer-events:none}
+  .al{position:absolute;inset:0;visibility:hidden}
+  .al.on{visibility:visible}
+  .alBar{position:absolute;left:96px;right:0;top:62px;height:118px;background:var(--ink);
+         clip-path:polygon(0 0,100% 0,calc(100% - 34px) 100%,0 100%);box-shadow:0 18px 40px #0008}
+  .alBar::before{content:"";position:absolute;left:0;top:0;bottom:0;width:10px;background:var(--copper)}
+  .alBar::after{content:"";position:absolute;left:0;right:34px;bottom:0;height:6px;background:var(--signal);transform-origin:left;transform:scaleX(0)}
+  .alTag{position:absolute;left:160px;top:36px;height:30px;padding:0 16px 0 12px;display:flex;align-items:center;gap:8px;background:var(--signal);color:#10192B;
+         font:800 17px/1 var(--cond);letter-spacing:.06em;clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%)}
+  .tally{width:10px;height:10px;border-radius:50%;background:var(--tally);box-shadow:0 0 0 2px #10192B33}
+  .alTxt{position:absolute;left:150px;right:50px;top:74px;overflow:hidden}
+  .alHead{font:italic 900 56px/1 var(--cond);letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap}
+  .alSub{margin-top:8px;font:600 21px/1 var(--cond);color:var(--fg2);letter-spacing:.02em;white-space:nowrap}
+  .alSub b{color:var(--signal);font-weight:800}
+  .alHam{position:absolute;left:0;top:0;width:170px;height:200px}
+  .alHam .wh{position:absolute;left:4px;bottom:6px;width:150px;opacity:.95;animation:spin 1.1s linear infinite}
+  .alHam .hm{position:absolute;left:14px;bottom:30px;width:142px;filter:drop-shadow(0 10px 12px #000a)}
+  .al.nap .alHam .wh{animation:none;filter:grayscale(.4) brightness(.7)}
+  .al.nap .alBar::after{background:var(--steel)}
+  .al.nap .alTag{background:var(--steel)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .al.in .alBar{animation:wipeIn .5s cubic-bezier(.7,0,.2,1) both}
+  .al.in .alBar::after{animation:grow .6s .45s cubic-bezier(.2,.8,.2,1) both}
+  .al.in .alTag{animation:wipeIn .35s .3s cubic-bezier(.7,0,.2,1) both}
+  .al.in .alHead{animation:rise .5s .35s cubic-bezier(.2,.9,.25,1) both}
+  .al.in .alSub{animation:rise .5s .5s cubic-bezier(.2,.9,.25,1) both}
+  .al.in .alHam{animation:leap .8s .15s cubic-bezier(.25,1.6,.4,1) both}
+  .al.in .alHam .hm{animation:bob .34s 1s ease-in-out infinite alternate}
+  .al.out{animation:wipeOut .45s cubic-bezier(.7,0,.6,1) both}
+  @keyframes wipeIn{from{clip-path:polygon(0 0,0 0,0 100%,0 100%)}}
+  @keyframes wipeOut{to{clip-path:inset(0 100% 0 0);opacity:0}}
+  @keyframes grow{to{transform:scaleX(1)}}
+  @keyframes rise{from{transform:translateY(110%);opacity:0}}
+  @keyframes leap{0%{transform:translate(-40px,120px) rotate(-25deg) scale(.6);opacity:0}100%{transform:none;opacity:1}}
+  @keyframes bob{to{transform:translateY(-7px) rotate(2deg)}}
+
+  /* ================= TELEMETRY: rev lights + big RPM ================= */
+  #gauge{width:400px}
+  .tm{background:var(--ink);box-shadow:0 18px 40px #0008;clip-path:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%)}
+  .tmHead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0 18px;border-left:6px solid var(--copper)}
+  .tmHead .t{font:800 18px/1 var(--cond);letter-spacing:.05em}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;background:var(--ink2);font:700 15px/1 var(--cond);letter-spacing:.04em;color:var(--fg2)}
+  .pill i{width:9px;height:9px;border-radius:50%;background:var(--steel)}
+  .pill.on{color:var(--fg)} .pill.on i{background:var(--go);box-shadow:0 0 8px var(--go)}
+  .rev{display:grid;grid-template-columns:repeat(15,1fr);gap:4px;padding:12px 14px 0 24px}
+  .rev i{height:12px;background:var(--ink3);transform:skewX(-14deg);transition:background .25s,box-shadow .25s}
+  .rev i.g{background:var(--go);box-shadow:0 0 8px #3fd07a99}
+  .rev i.y{background:var(--signal);box-shadow:0 0 8px #ffd23f99}
+  .rev i.r{background:var(--tally);box-shadow:0 0 8px #e5383b99}
+  .rev.max i{animation:blink .18s steps(2) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .tmMain{display:flex;align-items:flex-end;gap:14px;padding:6px 14px 4px 24px}
+  .tmWheel{width:62px;height:62px;flex:none;margin-bottom:6px}
+  .tmWheel img{width:100%;animation:spin var(--dur,2s) linear infinite;animation-play-state:paused}
+  .tm.on .tmWheel img{animation-play-state:running}
+  .rpm{font:italic 900 86px/.86 var(--cond);letter-spacing:-.02em}
+  .rpmU{font:700 22px/1 var(--cond);color:var(--fg2);margin-bottom:10px}
+  .tmRow{display:grid;grid-template-columns:repeat(3,1fr);margin:6px 0 0;border-top:1px solid var(--ink3)}
+  .tmRow div{padding:8px 0 12px 24px}
+  .tmRow div+div{border-left:1px solid var(--ink3);padding-left:14px}
+  .tmRow b{display:block;font:800 24px/1 var(--cond)}
+  .tmRow span{font:600 14px/1.2 var(--cond);color:var(--fg2);letter-spacing:.02em}
+
+  /* ================= BLOCK MINED: a full-width "goal" band ================= */
+  #block{width:1240px;height:240px;pointer-events:none}
+  .bk{position:absolute;inset:0;visibility:hidden}
+  .bk.on{visibility:visible}
+  .bkBand{position:absolute;left:0;right:0;top:40px;height:160px;background:var(--ink);transform:skewY(-3deg);box-shadow:0 24px 50px #0009;overflow:hidden}
+  .bkBand::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent 0 26px,#ffffff0a 26px 52px)}
+  .bkBand::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,#ffd23f55,transparent);transform:translateX(-120%)}
+  .bkEdge{position:absolute;left:0;right:0;height:8px;background:var(--signal);transform:skewY(-3deg)}
+  .bkEdge.t{top:34px}.bkEdge.b{top:198px;background:var(--copper)}
+  .bkIn{position:absolute;left:0;right:0;top:40px;height:160px;display:flex;align-items:center;gap:30px;padding:0 70px;transform:skewY(-3deg)}
+  .bkIco{width:112px;height:112px;flex:none;border-radius:50%;background:var(--copper);display:grid;place-items:center;box-shadow:inset 0 -6px 0 #0003}
+  .bkIco svg{width:84px;height:84px}
+  .bkLabel{font:800 26px/1 var(--cond);color:var(--signal);letter-spacing:.06em}
+  .bkNum{font:italic 900 110px/.9 var(--cond);letter-spacing:-.02em}
+  .bkMeta{margin-left:auto;text-align:right;font:700 26px/1.3 var(--cond);color:var(--fg2)}
+  .bkMeta b{color:var(--fg);font-weight:800}
+  .bk.in .bkBand,.bk.in .bkEdge{animation:slam .55s cubic-bezier(.2,1.3,.3,1) both}
+  .bk.in .bkEdge.b{animation-delay:.06s}
+  .bk.in .bkBand::after{animation:sweep 1.1s .45s ease-in-out}
+  .bk.in .bkIco{animation:pickIn .7s .25s cubic-bezier(.3,1.8,.4,1) both}
+  .bk.in .bkIco svg{animation:swing .4s 1s ease-in-out 3}
+  .bk.in .bkLabel{animation:rise .4s .35s both}
+  .bk.in .bkNum{animation:rise .5s .45s cubic-bezier(.2,.9,.25,1) both}
+  .bk.in .bkMeta{animation:rise .5s .6s both}
+  .bk.out{animation:fadeOut .5s ease-in both}
+  @keyframes slam{0%{transform:skewY(-3deg) scaleX(0)}100%{transform:skewY(-3deg)}}
+  @keyframes sweep{to{transform:translateX(320%)}}
+  @keyframes pickIn{from{transform:scale(0) rotate(-90deg)}}
+  @keyframes swing{50%{transform:rotate(-28deg)}}
+  @keyframes fadeOut{to{opacity:0;transform:translateY(-20px)}}
+  .sparks{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+  .sparks i{position:absolute;width:9px;height:9px}
+
+  /* ================= CALL THE ROUND: odds board ================= */
+  #poll{width:400px}
+  .pl{position:relative;background:var(--ink);box-shadow:0 18px 40px #0008;clip-path:polygon(22px 0,100% 0,100% 100%,0 100%,0 22px)}
+  .plHead{display:flex;align-items:stretch;justify-content:space-between;border-bottom:1px solid var(--ink3)}
+  .plHead h3{margin:0;padding:12px 16px 10px 20px;font:800 24px/1 var(--cond);letter-spacing:.01em}
+  .clock{min-width:86px;display:grid;place-items:center;background:var(--signal);color:#10192B;font:800 24px/1 var(--cond)}
+  .plBody{padding:12px 16px 14px 20px}
+  .sides{display:flex;justify-content:space-between;font:800 22px/1 var(--cond)}
+  .sides .n{color:var(--fg2);font-weight:700;margin-left:6px}
+  .sides .r{color:var(--copper)} .sides .z{color:var(--steel)}
+  .tug{position:relative;display:flex;height:26px;margin:8px 0 6px;background:var(--ink3);overflow:hidden;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+  .tug i{height:100%;transition:flex-basis .7s cubic-bezier(.2,.9,.3,1)}
+  .tug .a{background:var(--copper);flex:1 1 50%}
+  .tug .b{background:var(--steel);flex:1 1 50%}
+  .tug .mid{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--ink)}
+  .pct{display:flex;justify-content:space-between;font:700 16px/1 var(--cond);color:var(--fg2)}
+  .how{margin-top:10px;font:600 17px/1.3 var(--cond);color:var(--fg2)}
+  .how kbd{font:800 17px/1 var(--cond);color:var(--ink);background:var(--fg);padding:2px 6px;margin:0 1px}
+  .last{margin-top:6px;height:20px;overflow:hidden;font:600 16px/20px var(--cond);color:var(--fg)}
+  .last div{animation:rise .3s both}
+  .podium{margin-top:8px;border-top:1px solid var(--ink3);padding-top:8px;display:grid;grid-template-columns:22px 1fr auto;gap:3px 8px;font:600 17px/1.2 var(--cond)}
+  .podium .p{font-weight:800;color:var(--signal)}
+  .podium .s{color:var(--fg2)}
+  .stamp{display:none;margin:4px 0 2px 4px;padding:6px 16px;border:4px solid var(--go);color:var(--go);font:italic 900 40px/1 var(--cond);text-transform:uppercase;transform:rotate(-4deg);opacity:0}
+  .pl.res .sides,.pl.res .tug,.pl.res .pct{display:none}
+  .pl.res .stamp{display:inline-block}
+  .stamp.nap{border-color:var(--steel);color:var(--steel)}
+  .stamp.on{animation:stampIn .4s cubic-bezier(.3,1.7,.4,1) forwards}
+  @keyframes stampIn{0%{transform:rotate(-4deg) scale(2.2);opacity:0}100%{transform:rotate(-4deg) scale(1);opacity:1}}
+
+  /* ================= TICKER: live lower third ================= */
+  #ticker{height:60px}
+  .tk{display:flex;height:60px;background:var(--ink);box-shadow:0 -10px 30px #0006;border-top:4px solid var(--copper)}
+  .tkLive{flex:none;display:flex;align-items:center;gap:9px;padding:0 18px;background:var(--tally);color:#fff;font:800 22px/1 var(--cond);letter-spacing:.08em}
+  .tkLive i{width:11px;height:11px;border-radius:50%;background:#fff;animation:blink 1.2s steps(2) infinite}
+  .tkBrand{flex:none;display:flex;align-items:center;gap:10px;padding:0 22px 0 16px;background:var(--ink2);font:800 22px/1 var(--cond);letter-spacing:.02em;clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);padding-right:34px}
+  .tkBrand img{height:36px;animation:spin 3s linear infinite}
+  .tkTrack{flex:1;overflow:hidden;white-space:nowrap;display:flex;align-items:center;-webkit-mask:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);mask:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
+  .tkInner{display:inline-block;padding-left:100%;animation:marq var(--tdur,40s) linear infinite;font:600 24px/1 var(--cond);letter-spacing:.01em}
+  .tkInner span{margin-right:26px}
+  .tkInner span::after{content:"";display:inline-block;width:8px;height:8px;margin-left:26px;background:var(--copper);transform:rotate(45deg) translateY(-3px)}
+  .tkInner b{color:var(--signal);font-weight:800}
+  @keyframes marq{to{transform:translateX(-100%)}}
+  .tkClock{flex:none;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 18px;background:var(--ink2);min-width:150px}
+  .tkClock small{font:600 14px/1 var(--cond);color:var(--fg2)}
+  .tkClock b{font:800 28px/1 var(--cond)}
+
+  .err{position:fixed;left:8px;top:8px;font:600 14px/1 var(--body);background:#000c;color:#fff;padding:6px 10px}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01s!important;animation-iteration-count:1!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="pick" viewBox="0 0 64 64">
+      <path d="M31 17 L15 53" stroke="#3B2414" stroke-width="7" stroke-linecap="round"/>
+      <path d="M31 17 L15 53" stroke="#8A5A33" stroke-width="3" stroke-linecap="round"/>
+      <path d="M9 27 C17 14 33 8 55 13 C38 13 26 18 17 29 Z" fill="#F3F6FA" stroke="#10192B" stroke-width="2.5" stroke-linejoin="round"/>
+      <rect x="26" y="11" width="11" height="10" rx="2" transform="rotate(22 31 16)" fill="#10192B"/>
+    </symbol>
+  </svg>
+
+  <!-- RUN ALERT -->
+  <div class="w" id="alert">
+    <div class="al" id="alertBox">
+      <div class="alBar"></div>
+      <div class="alTag"><span class="tally"></span><span id="alTag">On the wheel</span></div>
+      <div class="alTxt"><div class="alHead" id="alHead">Squeektoshi is running</div><div class="alSub" id="alSub"></div></div>
+      <div class="alHam"><img class="wh" src="assets/wheel.webp" alt=""><img class="hm" src="assets/hero.webp" alt=""></div>
+    </div>
+  </div>
+
+  <!-- TELEMETRY -->
+  <div class="w" id="gauge">
+    <div class="tm" id="tm">
+      <div class="tmHead"><span class="t">Wheel telemetry</span><span class="pill" id="tmPill"><i></i><span id="tmState">Connecting</span></span></div>
+      <div class="rev" id="rev"></div>
+      <div class="tmMain">
+        <div class="tmWheel"><img src="assets/wheel.webp" alt=""></div>
+        <div class="rpm num" id="rpm">0.0</div><div class="rpmU">rpm</div>
+      </div>
+      <div class="tmRow">
+        <div><b class="num" id="spd">0.00</b><span>m/s now</span></div>
+        <div><b class="num" id="sess">0 m</b><span>run this stream</span></div>
+        <div><b class="num" id="blk">–</b><span>Squeek block</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOCK MINED -->
+  <div class="w" id="block">
+    <div class="bk" id="blockBox">
+      <div class="bkEdge t"></div><div class="bkBand"></div><div class="bkEdge b"></div>
+      <div class="bkIn">
+        <div class="bkIco"><svg viewBox="0 0 64 64"><use href="#pick"/></svg></div>
+        <div><div class="bkLabel" id="bkLabel">Block mined</div><div class="bkNum num" id="bkNum">#0</div></div>
+        <div class="bkMeta" id="bkMeta"></div>
+      </div>
+    </div>
+  </div>
+  <div class="sparks" id="sparks"></div>
+
+  <!-- CALL THE ROUND -->
+  <div class="w" id="poll">
+    <div class="pl" id="pl">
+      <div class="plHead"><h3 id="plTitle">Call the next round</h3><div class="clock num" id="clock">–:––</div></div>
+      <div class="plBody">
+        <div class="sides"><span class="r">He runs<span class="n num" id="cRun">0</span></span><span class="z"><span class="n num" id="cNap">0</span> He naps</span></div>
+        <div class="tug"><i class="a" id="tA"></i><i class="b" id="tB"></i><span class="mid"></span></div>
+        <div class="pct num"><span id="pA">50%</span><span id="pB">50%</span></div>
+        <div class="stamp" id="stamp">He ran</div>
+        <div class="how" id="how">Type <kbd>!run</kbd> or <kbd>!nap</kbd> in chat. The chain settles it.</div>
+        <div class="last" id="last"></div>
+        <div class="podium" id="podium"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TICKER -->
+  <div class="w" id="ticker">
+    <div class="tk">
+      <div class="tkLive"><i></i>Live</div>
+      <div class="tkBrand"><img src="assets/wheel.webp" alt="">Squeekchain</div>
+      <div class="tkTrack"><div class="tkInner" id="tkInner"><span>Connecting to the wheel</span></div></div>
+      <div class="tkClock"><small>Next round in</small><b class="num" id="tkClock">–:––</b></div>
+    </div>
+  </div>
+
+  <div class="err hidden" id="err"></div>
+
+<script>
+(() => {
+"use strict";
+const API = "https://api.squeekchain.com/v1";
+const Q = new URLSearchParams(window.__WC_QS || location.search);
+const CFG = {
+  w: Q.get("w") || "all",
+  channel: (Q.get("channel") || "").replace(/^#/, "").toLowerCase().trim(),
+  theme: Q.get("theme") || "broadcast",
+  scale: Math.min(3, Math.max(0.3, Number(Q.get("scale")) || 1)),
+  sound: Q.get("sound") !== "0",
+  napAlert: Q.get("nap") === "1",
+  demo: Q.get("demo") === "1",
+  alertSecs: Math.min(30, Math.max(4, Number(Q.get("secs")) || 9)),
+};
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) => Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const B = document.body;
+B.dataset.w = CFG.w;
+if (CFG.theme === "daylight" || CFG.theme === "copper") B.classList.add(CFG.theme);
+if (Q.get("checker") === "1") B.classList.add("checker");
+if (Q.get("bg") === "stage") B.classList.add("stagebg");
+document.documentElement.style.setProperty("--scale", CFG.scale);
+["alert", "gauge", "block", "poll", "ticker"].forEach((w) => { if (CFG.w !== "all" && CFG.w !== w) $(w).classList.add("hidden"); });
+const shown = (w) => !$(w).classList.contains("hidden");
+
+// ---------- sound: synthesised, no audio files ----------
+let actx = null;
+function tone(seq) {
+  if (!CFG.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    const t0 = actx.currentTime + 0.02;
+    seq.forEach(([f1, f2, at, dur, type, vol]) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || "triangle"; o.frequency.setValueAtTime(f1, t0 + at); o.frequency.exponentialRampToValueAtTime(f2, t0 + at + dur);
+      g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(vol || 0.2, t0 + at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+      o.connect(g).connect(actx.destination); o.start(t0 + at); o.stop(t0 + at + dur + 0.05);
+    });
+  } catch (e) {}
+}
+addEventListener("pointerdown", () => { if (CFG.sound) { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } });
+const SFX = {
+  run: () => tone([[180, 90, 0, .18, "sawtooth", .12], [1400, 2600, .12, .08], [1600, 3000, .24, .09], [1500, 2900, .36, .11]]),
+  nap: () => tone([[520, 260, 0, .45, "sine"], [420, 210, .5, .6, "sine"]]),
+  block: () => tone([[196, 98, 0, .25, "sawtooth", .14], [784, 784, .05, .1], [988, 988, .15, .1], [1175, 1175, .25, .1], [1568, 1568, .35, .4]]),
+  win: () => tone([[660, 990, 0, .14], [990, 1320, .15, .22]]),
+};
+
+// ---------- live data ----------
+const S = { status: null, settle: null, spinning: null, anchor: null, last: null, sessStartMm: null, ok: false };
+async function getJSON(path) {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);
+  try { const r = await fetch(API + path, { signal: c.signal, cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+function view() {
+  const st = S.status; if (!st) return null;
+  const m = st.measurement || {}, b = (st.builder && (st.builder.projected || st.builder.anchor)) || {};
+  return { spinning: m.coreStatus === "SPINNING", rpm: (m.rpmMilli || 0) / 1000, speed: (m.speedMmPerSecond || 0) / 1000,
+           distMm: Number(m.distanceMm || 0), block: Number(b.blockHeight || 0), progress: Number(b.blockProgress || 0) / 1e9 };
+}
+async function pollStatus() {
+  try { S.status = await getJSON("/status"); S.ok = true; err(""); }
+  catch (e) { S.ok = false; err("Can't reach the Squeekchain API. Retrying every 5 seconds."); }
+  onStatus();
+}
+async function pollSettle() { try { S.settle = await getJSON("/settlements?range=24h"); onSettle(); } catch (e) {} }
+function err(t) { const e = $("err"); e.textContent = t; e.classList.toggle("hidden", !t || CFG.w === "alert" || CFG.w === "block"); }
+
+function onStatus() {
+  const v = view(); if (!v) return;
+  if (S.spinning !== null && v.spinning !== S.spinning) v.spinning ? showAlert(false) : CFG.napAlert && showAlert(true);
+  S.spinning = v.spinning;
+  if (S.sessStartMm == null && v.distMm) S.sessStartMm = v.distMm;
+  // Rounds close every 10 minutes. Rounds with no work never appear in /settlements, so follow the settled-round
+  // counter in /status and read each round's work and blocks from the change in the settled totals.
+  const an = (S.status.builder && S.status.builder.anchor) || {};
+  const cur = { round: Number(an.settledThroughRound || 0), work: Number(an.cumulativeWork || 0), block: Number(an.blockHeight || 0) };
+  if (cur.round) {
+    if (S.anchor && cur.round > S.anchor.round) onRounds(S.anchor, cur);
+    if (!S.anchor || cur.round >= S.anchor.round) S.anchor = cur;
+  }
+  renderGauge(v); renderTicker();
+}
+function onSettle() { renderTicker(); }
+function onRounds(prev, cur) {
+  const work = Math.max(0, cur.work - prev.work), blocks = Math.max(0, cur.block - prev.block);
+  S.last = { round: cur.round, work };
+  resolvePoll(work > 0, { settledThroughRound: cur.round, workAdded: work });
+  if (blocks > 0) {
+    const x = S.settle && Array.isArray(S.settle.recentSettlements) && S.settle.recentSettlements.find((r) => Number(r.settledThroughRound) === cur.round);
+    showBlock({ last: cur.block, count: blocks, sqk: x ? Number(x.sqkMintedBaseUnits || 0) / 1e18 : 0, round: cur.round });
+  }
+}
+
+// shrink a line of display type until it fits its box (fonts differ between machines)
+function fitText(el, max) {
+  el.style.fontSize = max + "px";
+  const box = el.parentElement.clientWidth || el.clientWidth;
+  let size = max;
+  while (el.scrollWidth > box && size > max * 0.55) { size -= 2; el.style.fontSize = size + "px"; }
+}
+
+// ---------- run alert ----------
+let alT;
+function showAlert(nap) {
+  if (!shown("alert")) return;
+  const v = view() || {}; const box = $("alertBox");
+  box.classList.toggle("nap", nap);
+  $("alTag").textContent = nap ? "Off the wheel" : "On the wheel";
+  $("alHead").textContent = nap ? "Squeektoshi is napping" : "Squeektoshi is running";
+  $("alSub").innerHTML = nap ? "Mining pauses until he wakes up"
+    : `<b>${fmt(v.rpm || 0, 1)} rpm</b>  /  next block <b>#${fmt((v.block || 0) + 1)}</b>${CFG.channel ? "  /  call it: <b>!run</b> or <b>!nap</b>" : ""}`;
+  box.className = "al on" + (nap ? " nap" : ""); fitText($("alHead"), 56); fitText($("alSub"), 21); void box.offsetWidth; box.classList.add("in");
+  nap ? SFX.nap() : SFX.run();
+  clearTimeout(alT); alT = setTimeout(() => { box.classList.remove("in"); box.classList.add("out"); setTimeout(() => box.classList.remove("on", "out"), 500); }, CFG.alertSecs * 1000);
+}
+
+// ---------- block mined ----------
+let bkT;
+function showBlock(d) {
+  if (!shown("block")) return;
+  const box = $("blockBox");
+  $("bkLabel").textContent = d.count > 1 ? `${fmt(d.count)} Squeek blocks mined` : "Squeek block mined";
+  $("bkNum").textContent = "#" + fmt(d.last);
+  fitText($("bkNum"), 110);
+  $("bkMeta").innerHTML = `${d.sqk ? `<b>${fmt(d.sqk)}</b> SQK minted<br>` : ""}${d.round ? `round <b>${d.round}</b>` : ""}`;
+  box.className = "bk on"; void box.offsetWidth; box.classList.add("in");
+  sparks(Math.min(140, 50 + d.count * 3)); SFX.block();
+  clearTimeout(bkT); bkT = setTimeout(() => { box.classList.remove("in"); box.classList.add("out"); setTimeout(() => box.classList.remove("on", "out"), 520); }, 7500);
+}
+function sparks(n) {
+  const c = $("sparks"); const cols = ["#FFD23F", "#C8743A", "#F3F6FA", "#E8A35F"];
+  const r = $("block").getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement("i"); p.style.background = cols[i % cols.length]; p.style.left = cx + "px"; p.style.top = cy + "px"; c.appendChild(p);
+    const a = Math.random() * Math.PI * 2, sp = 200 + Math.random() * 520;
+    const dx = Math.cos(a) * sp, dy = Math.sin(a) * sp * .6 - 160;
+    p.animate([{ transform: "translate(0,0) rotate(0)", opacity: 1 },
+               { transform: `translate(${dx}px,${dy}px) rotate(${Math.random() * 540}deg)`, opacity: 1, offset: .45 },
+               { transform: `translate(${dx * 1.2}px,${dy + 520}px) rotate(${Math.random() * 900}deg)`, opacity: 0 }],
+              { duration: 1800 + Math.random() * 900, delay: 250 + Math.random() * 150, easing: "cubic-bezier(.15,.7,.4,1)", fill: "both" }).finished.then(() => p.remove());
+  }
+}
+
+// ---------- telemetry ----------
+const SEG = 15, MAXRPM = 90;
+$("rev").innerHTML = Array.from({ length: SEG }, () => "<i></i>").join("");
+function renderGauge(v) {
+  const on = v.spinning && v.rpm > 0;
+  $("tm").classList.toggle("on", on);
+  $("tmPill").classList.toggle("on", on);
+  $("tmState").textContent = !S.ok && !CFG.demo ? "Offline" : on ? "Running" : "Napping";
+  const lit = on ? Math.max(1, Math.round(Math.min(1, v.rpm / MAXRPM) * SEG)) : 0;
+  [...$("rev").children].forEach((el, i) => { el.className = i < lit ? (i < 7 ? "g" : i < 12 ? "y" : "r") : ""; });
+  $("rev").classList.toggle("max", lit >= SEG);
+  $("rpm").textContent = fmt(v.rpm, 1);
+  $("spd").textContent = fmt(v.speed, 2);
+  const m = S.sessStartMm == null ? 0 : (v.distMm - S.sessStartMm) / 1000;
+  $("sess").textContent = m >= 1000 ? fmt(m / 1000, 2) + " km" : fmt(m) + " m";
+  $("blk").textContent = "#" + fmt(v.block);
+  if (on) document.querySelector(".tmWheel img").style.setProperty("--dur", Math.max(.3, 60 / v.rpm).toFixed(2) + "s");
+}
+
+// ---------- ticker ----------
+let tkKey = "";
+function renderTicker() {
+  const v = view(), st = S.settle, it = [];
+  if (v) {
+    it.push(v.spinning ? `Squeektoshi is <b>running</b> at ${fmt(v.rpm, 1)} rpm` : `Squeektoshi is <b>napping</b>`);
+    it.push(`Squeek block <b>#${fmt(v.block)}</b> is ${Math.round(v.progress * 100)}% mined`);
+    if (S.sessStartMm != null) it.push(`<b>${fmt((v.distMm - S.sessStartMm) / 1000)} m</b> on the wheel this stream`);
+  }
+  if (st && st.summary) {
+    it.push(`Last 24 hours: <b>${fmt(st.summary.workAdded)}</b> work and <b>${fmt(st.summary.completedBlockCount)}</b> blocks`);
+    const minted = (st.buckets || []).reduce((a, b) => a + Number(b.sqkMintedBaseUnits || 0) / 1e18, 0);
+    if (minted) it.push(`<b>${fmt(minted)} SQK</b> minted in 24 hours`);
+    if (S.last) it.push(S.last.work ? `Round ${S.last.round} settled with <b>${fmt(S.last.work)}</b> work` : `Round ${S.last.round} settled quiet: he napped`);
+  }
+  if (CFG.channel) it.push(`Call the next round in chat with <b>!run</b> or <b>!nap</b>`);
+  const html = it.map((t) => `<span>${t}</span>`).join("");
+  if (html !== tkKey) { tkKey = html; const el = $("tkInner"); el.innerHTML = html; el.style.setProperty("--tdur", Math.max(28, it.length * 8) + "s"); }
+}
+
+// ---------- round clock (rounds close on every 10-minute boundary) ----------
+setInterval(() => {
+  const now = Date.now(), left = Math.ceil((now + 1) / 600000) * 600000 - now;
+  const txt = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}`;
+  $("tkClock").textContent = txt; if (P.phase === "open") $("clock").textContent = txt;
+}, 1000);
+
+// ---------- chat prediction ----------
+const P = { votes: new Map(), phase: "open" };
+const BKEY = CFG.demo ? null : "wheelcast:board:" + (CFG.channel || "local");
+let board = {}; if (BKEY) { try { board = JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (e) {} }
+const saveBoard = () => { if (BKEY) { try { localStorage.setItem(BKEY, JSON.stringify(board)); } catch (e) {} } };
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function vote(user, pick) {
+  if (P.phase !== "open" || !user) return;
+  const prev = P.votes.get(user); P.votes.set(user, pick);
+  if (prev !== pick) $("last").innerHTML = `<div><b>${esc(user)}</b> says he ${pick === "run" ? "runs" : "naps"}</div>`;
+  renderPoll();
+}
+function renderPoll() {
+  let r = 0, n = 0; P.votes.forEach((v) => (v === "run" ? r++ : n++)); const t = r + n;
+  const a = t ? (r / t) * 100 : 50;
+  $("cRun").textContent = r; $("cNap").textContent = n;
+  $("tA").style.flexBasis = a + "%"; $("tB").style.flexBasis = 100 - a + "%";
+  $("pA").textContent = Math.round(a) + "%"; $("pB").textContent = Math.round(100 - a) + "%";
+}
+function renderPodium() {
+  const top = Object.entries(board).filter(([, b]) => b.s > 0).sort((a, b) => b[1].s - a[1].s || b[1].w - a[1].w).slice(0, 3);
+  $("podium").innerHTML = top.map(([u, b], i) => `<span class="p">${i + 1}</span><span>${esc(u)}</span><span class="s">${b.s} in a row</span>`).join("");
+}
+function resolvePoll(ran, x) {
+  if (!shown("poll")) return;
+  const pick = ran ? "run" : "nap"; const winners = [];
+  P.votes.forEach((v, u) => { const b = board[u] || { w: 0, s: 0 }; if (v === pick) { b.w++; b.s++; winners.push(u); } else b.s = 0; board[u] = b; });
+  saveBoard(); P.phase = "result"; $("pl").classList.add("res");
+  const st = $("stamp"); st.textContent = ran ? "He ran" : "He napped"; st.className = "stamp" + (ran ? "" : " nap"); void st.offsetWidth; st.classList.add("on");
+  $("plTitle").textContent = `Round ${x.settledThroughRound} settled`;
+  $("clock").textContent = fmt(x.workAdded);
+  $("how").innerHTML = P.votes.size ? `${winners.length} of ${P.votes.size} called it${winners.length ? ": " + winners.slice(0, 4).map(esc).join(", ") + (winners.length > 4 ? " and more" : "") : ""}` : "No calls this round. Next one opens in a moment.";
+  $("last").innerHTML = "";
+  if (winners.length) SFX.win();
+  renderPodium();
+  setTimeout(openPoll, 25000);
+}
+function openPoll() {
+  P.votes.clear(); P.phase = "open"; $("pl").classList.remove("res");
+  $("stamp").className = "stamp"; $("plTitle").textContent = "Call the next round"; $("last").innerHTML = "";
+  $("how").innerHTML = CFG.channel || CFG.demo ? "Type <kbd>!run</kbd> or <kbd>!nap</kbd> in chat. The chain settles it." : "Add your Twitch channel in Wheelcast to turn on chat calls.";
+  renderPoll();
+}
+function chat(user, text) {
+  const t = String(text).trim().toLowerCase();
+  if (/^!(run|r|zoom|yes)\b/.test(t)) vote(user, "run");
+  else if (/^!(nap|n|sleep|no)\b/.test(t)) vote(user, "nap");
+}
+function connectTwitch() {
+  if (!CFG.channel) return;
+  const open = () => {
+    const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+    ws.onopen = () => ["CAP REQ :twitch.tv/tags", "PASS SCHMOOPIIE", "NICK justinfan" + Math.floor(10000 + Math.random() * 80000), "JOIN #" + CFG.channel].forEach((l) => ws.send(l));
+    ws.onmessage = (e) => String(e.data).split("\r\n").forEach((line) => {
+      if (!line) return;
+      if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv"); return; }
+      const m = line.match(/^(?:@(\S+) )?:(\w+)!\S+ PRIVMSG #\S+ :(.*)$/); if (!m) return;
+      const dn = (m[1] || "").match(/(?:^|;)display-name=([^;]*)/);
+      chat((dn && dn[1]) || m[2], m[3]);
+    });
+    ws.onclose = () => setTimeout(open, 5000);
+  };
+  open();
+}
+
+// ---------- test hooks for the Wheelcast page ----------
+const NAMES = ["wheelwatcher", "seedcollector", "napqueen", "cagecam", "rimrider", "pouchgang", "hamhodler", "midnightzoom"];
+window.addEventListener("message", (e) => {
+  if (!CFG.demo || e.source !== window.parent) return;
+  const d = e.data || {}; if (d.wheelcast !== "test") return;
+  if (d.ev === "show" && $(d.id)) { $(d.id).classList.toggle("hidden", !d.on); return; }
+  if (d.ev === "start") showAlert(false);
+  if (d.ev === "stop") showAlert(true);
+  if (d.ev === "block") { const v = view() || { block: 2048 }; showBlock({ last: v.block + 12, count: 12, sqk: 1859332, round: 512 }); }
+  if (d.ev === "vote") for (let i = 0; i < 5; i++) chat(NAMES[Math.floor(Math.random() * NAMES.length)] + (i ? i : ""), Math.random() < .6 ? "!run" : "!nap");
+  if (d.ev === "resolve") resolvePoll(Math.random() < .6, { settledThroughRound: 512, workAdded: 431 });
+});
+function demo() {
+  let dist = 6589390, block = 1999, rnd = 503, work = 18553, spin = false, t = 0;
+  const mk = () => ({ measurement: { coreStatus: spin ? "SPINNING" : "IDLE", rpmMilli: spin ? 38000 + Math.random() * 30000 : 0, speedMmPerSecond: spin ? 290 + Math.random() * 90 : 0, distanceMm: dist },
+                      builder: { anchor: { settledThroughRound: String(rnd), cumulativeWork: String(work), blockHeight: String(block) },
+                                 projected: { blockHeight: String(block), blockProgress: String(Math.floor(Math.random() * 1e9)) } } });
+  S.ok = true; S.status = mk();
+  S.settle = { summary: { workAdded: "7505", completedBlockCount: "859" }, buckets: [{ sqkMintedBaseUnits: "1550668835404647537719582" }], recentSettlements: [] };
+  onStatus(); renderTicker();
+  NAMES.slice(0, 6).forEach((u, i) => chat(u, i % 3 ? "!run" : "!nap"));
+  setInterval(() => {
+    t++; if (t % 12 === 2) spin = !spin;
+    if (spin) dist += 1800;
+    if (t % 5 === 0) chat(NAMES[t % NAMES.length] + t, Math.random() < .6 ? "!run" : "!nap");
+    if (t === 7 || t % 15 === 0) {
+      rnd++; const w = spin || t === 7 ? 312 : 0, b = w ? 6 : 0; work += w; block += b;
+      S.settle.recentSettlements.unshift({ settledThroughRound: String(rnd), workAdded: String(w), sqkMintedBaseUnits: "235172524800704839843728" });
+    }
+    S.status = mk(); onStatus();
+  }, 2000);
+}
+
+openPoll(); renderPodium();
+if (CFG.demo) demo();
+else { pollStatus(); pollSettle(); setInterval(pollStatus, 5000); setInterval(pollSettle, 30000); connectTwitch(); }
+})();
+</script>
+</body>
+</html>

@@ -461,9 +461,9 @@ setInterval(() => {
 
 // ---------- chat prediction ----------
 const P = { votes: new Map(), phase: "open" };
-const BKEY = "wheelcast:board:" + (CFG.channel || "local");
-let board = {}; try { board = JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (e) {}
-const saveBoard = () => { try { localStorage.setItem(BKEY, JSON.stringify(board)); } catch (e) {} };
+const BKEY = CFG.demo ? null : "wheelcast:board:" + (CFG.channel || "local");
+let board = {}; if (BKEY) { try { board = JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (e) {} }
+const saveBoard = () => { if (BKEY) { try { localStorage.setItem(BKEY, JSON.stringify(board)); } catch (e) {} } };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function vote(user, pick) {
   if (P.phase !== "open" || !user) return;
@@ -527,6 +527,7 @@ function connectTwitch() {
 // ---------- test hooks for the Wheelcast page ----------
 const NAMES = ["wheelwatcher", "seedcollector", "napqueen", "cagecam", "rimrider", "pouchgang", "hamhodler", "midnightzoom"];
 window.addEventListener("message", (e) => {
+  if (!CFG.demo || e.source !== window.parent) return;
   const d = e.data || {}; if (d.wheelcast !== "test") return;
   if (d.ev === "show" && $(d.id)) { $(d.id).classList.toggle("hidden", !d.on); return; }
   if (d.ev === "start") showAlert(false);

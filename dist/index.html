@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wheelcast: broadcast graphics for Squeektoshi's wheel</title>
+<meta name="description" content="Free OBS overlays driven by Squeekchain's live API: run alerts, wheel telemetry, block banners, Twitch chat calls and a stats ticker.">
+<!-- SQUEEKCHAIN-VERIFY: paste the page tag Squeekchain gives you on the line below -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800;1,900&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10192B; --desk:#162236; --rack:#1E2D46; --seam:#2C3F60; --paper:#F3F6FA; --dim:#9AABC2;
+    --signal:#FFD23F; --copper:#C8743A; --tally:#E5383B; --go:#3FD07A;
+    --cond:"Barlow Condensed","Bahnschrift Condensed","Bahnschrift","Arial Narrow","DejaVu Sans Condensed",sans-serif;
+    --body:"Barlow","Bahnschrift",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--ink)}
+  body{margin:0;color:var(--paper);font:400 17px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+  a{color:var(--signal)}
+  :focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 28px}
+
+  /* masthead */
+  .mast{display:flex;align-items:center;gap:20px;padding:18px 0;border-bottom:1px solid var(--seam)}
+  .mark{font:italic 900 34px/1 var(--cond);letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  .mark svg{width:34px;height:34px}
+  .live{margin-left:auto;display:flex;align-items:center;gap:10px;font:600 17px/1 var(--cond);color:var(--dim)}
+  .live b{color:var(--paper);font-weight:700}
+  .lamp{width:12px;height:12px;border-radius:50%;background:var(--seam)}
+  .lamp.on{background:var(--go);box-shadow:0 0 10px var(--go)}
+  .lamp.off{background:var(--tally)}
+
+  /* control room: desk on the left, program monitor on the right */
+  .room{display:grid;grid-template-columns:330px 1fr;grid-template-rows:auto 1fr;grid-template-areas:"lead mon" "desk mon";column-gap:34px;padding:34px 0 26px}
+  .lead{grid-area:lead}.monitor{grid-area:mon}.desk{grid-area:desk;align-self:start}
+  @media (max-width:980px){.room{grid-template-columns:1fr;grid-template-areas:"lead" "mon" "desk";row-gap:24px}}
+  @media (max-width:600px){.mast{flex-wrap:wrap;gap:6px}.live{margin-left:0;width:100%;font-size:15px}h1{font-size:38px}}
+  h1{font:800 46px/1.02 var(--cond);margin:0 0 14px;letter-spacing:-.005em}
+  .intro{color:var(--dim);margin:0 0 26px;max-width:38ch}
+  .desk{display:grid;gap:16px}
+  .field label{display:block;font:600 16px/1 var(--cond);color:var(--dim);margin-bottom:6px}
+  .field input[type=text],.field input[type=number],.field select{width:100%;font:500 17px/1 var(--body);color:var(--paper);background:var(--desk);border:1px solid var(--seam);border-radius:4px;padding:11px 12px}
+  .field .hint{font-size:14px;color:var(--dim);margin-top:5px}
+  .seg{display:flex;border:1px solid var(--seam);border-radius:4px;overflow:hidden}
+  .seg button{flex:1;font:700 16px/1 var(--cond);color:var(--dim);background:var(--desk);border:0;padding:11px 6px;cursor:pointer}
+  .seg button+button{border-left:1px solid var(--seam)}
+  .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink)}
+  .toggles{display:grid;gap:8px}
+  .tog{display:flex;align-items:center;gap:10px;font:500 16px/1.2 var(--body);cursor:pointer}
+  .tog input{width:18px;height:18px;accent-color:var(--signal)}
+
+  .monitor{position:relative}
+  .bezel{background:#05080e;border:1px solid var(--seam);border-radius:6px;padding:10px;box-shadow:0 30px 60px #0008}
+  .screen{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:2px;background:#000}
+  .screen iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:transparent}
+  .mvLabel{position:absolute;left:10px;top:10px;display:flex;gap:0;font:800 15px/1 var(--cond);letter-spacing:.04em;z-index:2}
+  .mvLabel span{padding:6px 10px;background:var(--tally);color:#fff}
+  .mvLabel em{font-style:normal;padding:6px 10px;background:#000c;color:var(--dim)}
+  .spk{position:absolute;right:10px;top:10px;z-index:2;font:800 15px/1 var(--cond);letter-spacing:.03em;color:var(--dim);background:#000c;border:1px solid var(--seam);padding:6px 10px 6px 28px;cursor:pointer}
+  .spk::before{content:"";position:absolute;left:10px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:var(--seam)}
+  .spk[aria-pressed="true"]{color:#fff;border-color:var(--go)}
+  .spk[aria-pressed="true"]::before{background:var(--go);box-shadow:0 0 8px var(--go)}
+  .sources{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+  @media (max-width:700px){.sources{grid-template-columns:repeat(2,1fr)}}
+  .src{position:relative;text-align:left;font:700 17px/1.1 var(--cond);color:var(--paper);background:var(--desk);border:1px solid var(--seam);border-radius:4px;padding:10px 10px 10px 30px;cursor:pointer}
+  .src::before{content:"";position:absolute;left:11px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--seam)}
+  .src[aria-pressed="true"]{border-color:var(--tally)}
+  .src[aria-pressed="true"]::before{background:var(--tally);box-shadow:0 0 8px var(--tally)}
+  .src small{display:block;font:500 13px/1.2 var(--body);color:var(--dim);margin-top:3px}
+  .monNote{font-size:14px;color:var(--dim);margin:10px 0 0}
+
+  /* source list */
+  h2{font:800 32px/1.1 var(--cond);margin:0 0 6px}
+  .sub{color:var(--dim);margin:0 0 18px;max-width:64ch}
+  .list{border-top:1px solid var(--seam);margin-bottom:56px}
+  .row{display:grid;grid-template-columns:230px 1fr 290px;gap:26px;align-items:start;padding:22px 0;border-bottom:1px solid var(--seam)}
+  @media (max-width:980px){.row{grid-template-columns:1fr}}
+  .row h3{margin:0;font:800 26px/1.05 var(--cond)}
+  .row .size{display:inline-block;margin-top:8px;font:600 15px/1 var(--cond);color:var(--ink);background:var(--dim);padding:4px 7px;border-radius:2px}
+  .row p{margin:0;color:var(--dim);max-width:60ch}
+  .row p b{color:var(--paper);font-weight:600}
+  .act{display:grid;gap:8px}
+  .link{display:flex;border:1px solid var(--seam);border-radius:4px;overflow:hidden}
+  .link input{flex:1;min-width:0;font:500 13px/1 ui-monospace,Consolas,monospace;color:var(--dim);background:var(--desk);border:0;padding:10px}
+  .link button{font:800 16px/1 var(--cond);background:var(--signal);color:var(--ink);border:0;padding:0 14px;cursor:pointer}
+  .fire{display:flex;gap:6px;flex-wrap:wrap}
+  .fire button{font:700 15px/1 var(--cond);color:var(--paper);background:transparent;border:1px solid var(--seam);border-radius:4px;padding:8px 10px;cursor:pointer}
+  .fire button:hover,.src:hover{border-color:var(--dim)}
+
+  /* OBS steps: a real sequence, so it is numbered */
+  .steps{padding:0;margin-top:0;display:grid;grid-template-columns:repeat(4,1fr);gap:0;counter-reset:s;border:1px solid var(--seam);border-radius:6px;overflow:hidden;margin-bottom:28px}
+  @media (max-width:980px){.steps{grid-template-columns:1fr 1fr}}
+  .steps li{list-style:none;padding:18px 18px 20px;background:var(--desk);counter-increment:s}
+  .steps li+li{border-left:1px solid var(--seam)}
+  .steps li::before{content:counter(s);display:block;font:italic 900 44px/1 var(--cond);color:var(--copper);margin-bottom:6px}
+  .steps b{font-weight:600}
+  .fine{display:grid;grid-template-columns:1fr 1fr;gap:28px;color:var(--dim);font-size:15px;padding:0 0 40px}
+  @media (max-width:980px){.fine{grid-template-columns:1fr}}
+  .fine h4{margin:0 0 4px;font:700 19px/1.2 var(--cond);color:var(--paper)}
+  .fine p{margin:0}
+  footer{border-top:1px solid var(--seam);padding:18px 0 30px;color:var(--dim);font-size:14px}
+  .foot{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  .by{display:inline-flex;align-items:center;gap:8px;font:700 17px/1 var(--cond);color:var(--paper);text-decoration:none;border:1px solid var(--seam);border-radius:4px;padding:8px 12px}
+  .by:hover{border-color:var(--dim)}
+  .by svg{width:15px;height:15px}
+  .by span{color:var(--dim);font-weight:600}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--paper);color:var(--ink);font:700 17px/1 var(--cond);padding:12px 18px;border-radius:4px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="mark"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="#C8743A" stroke-width="4"/><g stroke="#C8743A" stroke-width="3"><path d="M20 3v34M3 20h34M8 8l24 24M32 8L8 32"/></g><circle cx="20" cy="20" r="5" fill="#FFD23F"/></svg>Wheelcast</div>
+    <div class="live" aria-live="polite"><span class="lamp" id="lamp"></span><span id="liveTxt">Checking the wheel</span></div>
+  </header>
+
+  <section class="room">
+    <div class="lead">
+      <h1>Broadcast graphics for a hamster</h1>
+      <p class="intro">Squeektoshi's wheel, live on your stream. Five OBS overlays that react to Squeekchain in real time. Free, no login, nothing to install.</p>
+    </div>
+      <div class="desk">
+        <div class="field">
+          <label for="ch">Twitch channel</label>
+          <input type="text" id="ch" placeholder="yourchannel" autocomplete="off" spellcheck="false">
+          <div class="hint">Needed for chat calls. Wheelcast only reads chat.</div>
+        </div>
+        <div class="field">
+          <label id="themeL">Look</label>
+          <div class="seg" role="group" aria-labelledby="themeL" id="theme">
+            <button type="button" data-v="broadcast" aria-pressed="true">Broadcast</button>
+            <button type="button" data-v="copper" aria-pressed="false">Copper</button>
+            <button type="button" data-v="daylight" aria-pressed="false">Daylight</button>
+          </div>
+        </div>
+        <div class="field">
+          <label id="scaleL">Size</label>
+          <div class="seg" role="group" aria-labelledby="scaleL" id="scale">
+            <button type="button" data-v="0.75" aria-pressed="false">75%</button>
+            <button type="button" data-v="1" aria-pressed="true">100%</button>
+            <button type="button" data-v="1.25" aria-pressed="false">125%</button>
+            <button type="button" data-v="1.5" aria-pressed="false">150%</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="secs">Run alert stays on screen</label>
+          <input type="number" id="secs" min="4" max="30" value="9" aria-describedby="secsH">
+          <div class="hint" id="secsH">Seconds, 4 to 30.</div>
+        </div>
+        <div class="toggles">
+          <label class="tog"><input type="checkbox" id="sound" checked> Play sounds</label>
+          <label class="tog"><input type="checkbox" id="nap"> Also announce when he naps</label>
+        </div>
+      </div>
+
+    <div class="monitor">
+      <div class="bezel">
+        <div class="screen" id="screen">
+          <div class="mvLabel"><span>PGM</span><em>Demo feed</em></div>
+          <button type="button" class="spk" id="spk" aria-pressed="false" aria-label="Monitor sound">Sound off</button>
+        </div>
+      </div>
+      <div class="sources" id="sources"></div>
+      <p class="monNote">Click a source to take it on or off air. The monitor runs on demo data; your links use the live wheel.</p>
+    </div>
+  </section>
+
+  <h2>Sources</h2>
+  <p class="sub">Each overlay is its own OBS browser source, so you can place, size and hide them separately. Copy a link, then add it in OBS.</p>
+  <div class="list" id="list"></div>
+
+  <h2>Adding a source in OBS</h2>
+  <p class="sub">Works the same in Streamlabs, Twitch Studio and vMix: look for "Browser source" or "Web page".</p>
+  <ol class="steps">
+    <li>Copy the link of the overlay you want.</li>
+    <li>In OBS, open <b>Sources</b>, press <b>+</b> and choose <b>Browser</b>.</li>
+    <li>Paste the link into <b>URL</b> and enter the width and height shown next to the overlay.</li>
+    <li>Tick <b>Control audio via OBS</b> to mix the sounds, then drag the overlay into place.</li>
+  </ol>
+
+  <div class="fine">
+    <div><h4>Where the data comes from</h4><p>Your OBS reads Squeekchain's public API every few seconds. Run alerts follow the wheel sensor; block banners and chat calls follow the rounds settled on Sepolia, so nobody can fake a result.</p></div>
+    <div><h4>What Wheelcast keeps</h4><p>Nothing on a server. Chat is read anonymously and never posted to. Prediction streaks live in your OBS browser, per channel. The pages load the Barlow typeface from Google Fonts (fonts.googleapis.com and fonts.gstatic.com). Squeektoshi's wheel time is never forced or encouraged.</p></div>
+  </div>
+
+  <footer class="foot">
+    <span>Wheelcast is a free community tool built on <a href="https://squeekchain.com" target="_blank" rel="noopener">Squeekchain</a>'s public API.</span>
+    <a class="by" href="https://x.com/serkankels" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.9 2H22l-6.8 7.8L23 22h-6.2l-4.8-6.3L6.4 22H3.3l7.3-8.3L1 2h6.3l4.4 5.8zM17.8 20h1.7L6.3 3.9H4.5z"/></svg>Made by serkan <span>@serkankels</span></a>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SRC = [
+  { id: "alert", name: "Run alert", short: "He starts running", w: 800, h: 220,
+    desc: "A wedge wipes in and Squeektoshi leaps out of it <b>the moment the wheel sensor reports he is running</b>, with his live rpm and the next block. Can also announce naps.",
+    tests: [["start", "Fire run alert"], ["stop", "Fire nap alert"]] },
+  { id: "gauge", name: "Wheel telemetry", short: "Rpm and rev lights", w: 400, h: 230,
+    desc: "Rev lights that climb from green to red with his <b>real rpm</b>, plus speed, distance run during your stream and the current Squeek block.", tests: [] },
+  { id: "block", name: "Block banner", short: "Blocks get mined", w: 1920, h: 1080,
+    desc: "A full-width banner and copper sparks whenever <b>a settled round completes Squeek blocks</b>, with the SQK minted and the round number.",
+    tests: [["block", "Fire block banner"]] },
+  { id: "poll", name: "Chat calls", short: "Viewers call the round", w: 400, h: 330,
+    desc: "Viewers type <b>!run</b> or <b>!nap</b>. When the 10-minute round settles on chain, the board stamps the result and keeps everyone's streak.",
+    tests: [["vote", "Add sample calls"], ["resolve", "Settle the round"]] },
+  { id: "ticker", name: "Ticker", short: "Live stats crawl", w: 1920, h: 60,
+    desc: "A lower third with a live tally, a crawl of wheel and chain stats, and a clock counting down to the next round.", tests: [] },
+];
+const st = { theme: "broadcast", scale: "1", sound: false, onAir: new Set(SRC.map((s) => s.id)) };
+const base = new URL("overlay.html", location.href).href;
+
+function q(extra) {
+  const p = new URLSearchParams();
+  const ch = $("ch").value.trim().replace(/^https?:\/\/(www\.)?twitch\.tv\//, "").replace(/^#/, "").replace(/\/.*$/, "");
+  if (ch) p.set("channel", ch);
+  if (st.theme !== "broadcast") p.set("theme", st.theme);
+  if (st.scale !== "1") p.set("scale", st.scale);
+  if (!$("sound").checked) p.set("sound", "0");
+  if ($("nap").checked) p.set("nap", "1");
+  const s = Number($("secs").value); if (s && s !== 9) p.set("secs", Math.min(30, Math.max(4, s)));
+  Object.entries(extra).forEach(([k, v]) => p.set(k, v));
+  return p.toString();
+}
+
+// source buttons under the monitor
+$("sources").innerHTML = SRC.map((s) => `<button type="button" class="src" data-src="${s.id}" aria-pressed="true">${s.name}<small>${s.short}</small></button>`).join("");
+// source rows
+$("list").innerHTML = SRC.map((s) => `
+  <div class="row">
+    <div><h3>${s.name}</h3><span class="size">${s.w} × ${s.h}</span></div>
+    <p>${s.desc}</p>
+    <div class="act">
+      <div class="link"><input id="url-${s.id}" readonly aria-label="${s.name} link"><button type="button" data-copy="${s.id}">Copy link</button></div>
+      ${s.tests.length ? `<div class="fire">${s.tests.map(([ev, l]) => `<button type="button" data-ev="${ev}">${l}</button>`).join("")}</div>` : ""}
+    </div>
+  </div>`).join("");
+
+// program monitor
+let frame = null;
+// Some hosts forbid framing their pages (frame-ancestors 'none'), so the monitor loads the overlay's HTML
+// and renders it inline with srcdoc; opened from disk (no fetch), it falls back to a normal frame.
+let overlaySrc = null;
+async function loadOverlay() {
+  if (overlaySrc !== null) return overlaySrc;
+  try { const r = await fetch("overlay.html", { cache: "no-store" }); overlaySrc = r.ok ? await r.text() : ""; } catch (e) { overlaySrc = ""; }
+  return overlaySrc;
+}
+async function mount() {
+  const scr = $("screen"); if (frame) frame.remove();
+  frame = document.createElement("iframe"); frame.width = 1920; frame.height = 1080; frame.title = "Program monitor"; frame.allow = "autoplay";
+  const qs = q({ w: "all", demo: "1", sound: st.sound && $("sound").checked ? "1" : "0", bg: "stage" });
+  const html = await loadOverlay();
+  if (html) frame.srcdoc = html.replace("<head>", `<head><base href="${base}"><script>window.__WC_QS=${JSON.stringify("?" + qs)}<\/script>`);
+  else frame.src = base + "?" + qs;
+  frame.addEventListener("load", () => st.onAir.size < SRC.length && SRC.forEach((s) => send({ ev: "show", id: s.id, on: st.onAir.has(s.id) })));
+  scr.appendChild(frame); fit();
+}
+function fit() { if (!frame) return; const s = $("screen").clientWidth / 1920; frame.style.transform = `scale(${s})`; }
+function send(m) { frame && frame.contentWindow && frame.contentWindow.postMessage(Object.assign({ wheelcast: "test" }, m), "*"); }
+function urls() { SRC.forEach((s) => ($("url-" + s.id).value = base + "?" + q({ w: s.id }))); }
+let t; function changed(remount) { urls(); if (remount) { clearTimeout(t); t = setTimeout(mount, 350); } }
+
+document.addEventListener("click", async (e) => {
+  const seg = e.target.closest(".seg button");
+  if (seg) {
+    const g = seg.parentElement; g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === seg)));
+    st[g.id] = seg.dataset.v; changed(true);
+  }
+  if (e.target.closest("#spk")) {
+    st.sound = !st.sound; const b = $("spk"); b.setAttribute("aria-pressed", String(st.sound)); b.textContent = st.sound ? "Sound on" : "Sound off";
+    if (st.sound && !$("sound").checked) { $("sound").checked = true; urls(); }
+    mount(); toast(st.sound ? "Monitor sound on. Fire a test below to hear it." : "Monitor sound off.");
+  }
+  const src = e.target.closest("[data-src]");
+  if (src) {
+    const id = src.dataset.src, on = !st.onAir.has(id);
+    on ? st.onAir.add(id) : st.onAir.delete(id); src.setAttribute("aria-pressed", String(on)); send({ ev: "show", id, on });
+  }
+  const cp = e.target.closest("[data-copy]");
+  if (cp) {
+    const inp = $("url-" + cp.dataset.copy);
+    try { await navigator.clipboard.writeText(inp.value); toast("Link copied. Paste it into an OBS browser source."); }
+    catch (err) { inp.focus(); inp.select(); toast("Press Ctrl+C to copy the selected link."); }
+  }
+  const fire = e.target.closest("[data-ev]");
+  if (fire) {
+    const id = fire.closest(".row").querySelector("[data-copy]").dataset.copy;
+    if (!st.onAir.has(id)) document.querySelector(`[data-src="${id}"]`).click();
+    send({ ev: fire.dataset.ev });
+    $("screen").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  }
+});
+$("ch").addEventListener("input", () => changed(true));
+$("secs").addEventListener("input", () => changed(true));
+$("sound").addEventListener("change", () => changed(st.sound));
+$("nap").addEventListener("change", () => changed(false));
+addEventListener("resize", fit);
+let tt; function toast(s) { const el = $("toast"); el.textContent = s; el.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => el.classList.remove("show"), 2600); }
+try { const c = localStorage.getItem("wheelcast:channel"); if (c) $("ch").value = c; } catch (e) {}
+$("ch").addEventListener("change", () => { try { localStorage.setItem("wheelcast:channel", $("ch").value.trim()); } catch (e) {} });
+
+// live status of the real wheel in the masthead
+async function live() {
+  try {
+    const r = await fetch("https://api.squeekchain.com/v1/status", { cache: "no-store" }); const j = await r.json();
+    const m = j.measurement || {}, b = (j.builder && (j.builder.projected || j.builder.anchor)) || {};
+    const on = m.coreStatus === "SPINNING";
+    $("lamp").className = "lamp" + (on ? " on" : "");
+    $("liveTxt").innerHTML = on ? `Squeektoshi is <b>running</b> at ${((m.rpmMilli || 0) / 1000).toFixed(1)} rpm` : `Squeektoshi is <b>napping</b>, block ${Number(b.blockHeight || 0).toLocaleString("en-US")}`;
+  } catch (e) { $("lamp").className = "lamp off"; $("liveTxt").textContent = "Can't reach the Squeekchain API right now"; }
+}
+live(); setInterval(live, 15000);
+urls(); mount();
+})();
+</script>
+</body>
+</html>
